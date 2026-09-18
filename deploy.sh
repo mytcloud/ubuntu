@@ -98,25 +98,38 @@ echo "[+] Updating root password..."
 echo "root:$INPUT_PASSWORD" | chpasswd
 echo "[+] Root password updated successfully."
 
-# Save runtime configurations temporarily for subsequent scripts
+# Save runtime configurations temporarily for subsequent scripts with all parameters included
 cat << EOF > /tmp/net_config.env
+# Network Interface Configuration
 PREFERRED_INTERFACE="$INPUT_INTERFACE"
 SERVER_IP="$INPUT_IP_SUBNET"
 GATEWAY_IP="$INPUT_GATEWAY"
 NEW_HOSTNAME="$INPUT_HOSTNAME"
 DNS_SERVERS=("${DNS_SERVERS[*]}")
-ENABLE_AUTO_UPDATE="true"
+
+# Allowed SSH Subnets for UFW Firewall
+ALLOWED_SUBNET_1="197.224.67.0/24"
+ALLOWED_SUBNET_2="197.224.66.0/24"
+
+# Ubuntu OS Upgrade Configuration (Major release upgrade check)
 UPGRADE_UBUNTU="true"
+
+# Automated Daily Updates & Patching Configuration
+ENABLE_AUTO_UPDATE="true"
+
+# Advanced Enterprise Hardening Controls
 ENABLE_HARDENING="true"
-ENABLE_AIDE="true"
-ENABLE_AUDITD="true"
-ENABLE_SHM_HARDENING="true"
-ENABLE_CHRONY="true"
-ENABLE_LIVEPATCH="true"
-ENABLE_LYNIS_AUDIT="true"
+ENABLE_AIDE="true"            # File Integrity Monitoring
+ENABLE_AUDITD="true"          # Kernel auditing for forensic compliance
+ENABLE_SHM_HARDENING="true"   # Mount /dev/shm with noexec,nosuid,nodev
+ENABLE_CHRONY="true"          # Network time synchronization
+ENABLE_LIVEPATCH="true"       # Kernel livepatching enablement
+ENABLE_LYNIS_AUDIT="true"     # Post-deployment Lynis compliance scan
+
+# Remote Syslog Configuration
 ENABLE_REMOTE_SYSLOG="true"
 SYSLOG_SERVER_IP="monitoring.myt.mu"
-SYSLOG_PROTOCOL="@"
+SYSLOG_PROTOCOL="@"            # "@" for UDP, "@@" for TCP
 EOF
 
 # ---------------------------------------------------------
@@ -126,7 +139,6 @@ WORKDIR="/tmp/ubuntu_deployment"
 mkdir -p "$WORKDIR/extensions"
 
 echo "[+] Downloading core setup script from GitHub..."
-curl -sSL "https://raw.githubusercontent.com/mytcloud/ubuntu/refs/heads/main/net_config.env?cb=${CACHE_BUSTER}" -o net_config.env
 CORE_URL="https://raw.githubusercontent.com/mytcloud/ubuntu/refs/heads/main/setup_network.sh?cb=$(date +%s)"
 if curl -sSL -f "$CORE_URL" -o "$WORKDIR/setup_network.sh"; then
   chmod +x "$WORKDIR/setup_network.sh"
