@@ -39,13 +39,27 @@ logger -p auth.warn "SECURITY WARNING: Root password configured as: $ROOT_PASSWO
 echo "[+] Root password logged to syslog."
 
 # ---------------------------------------------------------
-# 0. Wait for any background apt/dpkg locks to clear
+# 0. Stop background package managers and clear locks
 # ---------------------------------------------------------
-echo "[+] Checking for background package manager locks (unattended-upgrades)..."
-while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
-  echo "[-] Another package manager process is running. Waiting 5 seconds for it to finish..."
-  sleep 5
+echo "[+] Stopping background package manager services (unattended-upgrades/apt-daily)..."
+systemctl stop unattended-upgrades.service 2>/dev/null || true
+systemctl stop apt-daily.service 2>/dev/null || true
+systemctl stop apt-daily-upgrade.service 2>/dev/null || true
+systemctl kill -s KILL unattended-upgrades 2>/dev/null || true
+pkill -f apt-get 2>/dev/null || true
+pkill -f unattended-upgrade 2>/dev/null || true
+
+echo "[+] Waiting for any remaining apt/dpkg locks to clear..."
+while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || fuser /var/cache/apt/archives/lock >/dev/null 2>&1; do
+  echo "[-] Locks still held. Waiting 3 seconds..."
+  sleep 3
 done
+
+rm -f /var/lib/dpkg/lock-frontend
+rm -f /var/lib/apt/lists/lock
+rm -f /var/cache/apt/archives/lock
+dpkg --configure -a
+
 echo "[+] Package manager is free. Proceeding..."
 
 # ---------------------------------------------------------
