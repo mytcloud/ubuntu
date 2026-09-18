@@ -43,20 +43,35 @@ done
 echo "[+] System time synchronized successfully!"
 
 # ---------------------------------------------------------
+# 0.6 Clean Corrupt Apt Lists & Force Fresh Sync
+# ---------------------------------------------------------
+echo "[+] Cleaning local package lists to prevent GPG split errors..."
+rm -rf /var/lib/apt/lists/*
+apt-get clean
+
+# ---------------------------------------------------------
 # 0.7 Configure Remote Syslog Forwarding First (Ensures capture)
 # ---------------------------------------------------------
 if [ "$ENABLE_REMOTE_SYSLOG" = "true" ]; then
+  if [ -z "$SYSLOG_SERVER" ]; then
+    echo "[-] Error: SYSLOG_SERVER variable is empty in net_config.env!"
+    exit 1
+  fi
+
   echo "[+] Configuring remote syslog forwarding to $SYSLOG_SERVER..."
   apt-get update && apt-get install -y rsyslog
   systemctl enable rsyslog
 
   cat << EOF > /etc/rsyslog.d/40-remote-forward.conf
 # Forward all system, kernel, and application logs to remote syslog server via DNS/IP
-*.* ${SYSLOG_PROTOCOL}${SYSLOG_SERVER}:514
+*.* @${SYSLOG_SERVER}:514
 EOF
 
   systemctl restart rsyslog
-  echo "[+] Remote syslog forwarding active."
+  
+  # Send an immediate test message to verify ingestion
+  logger -p local0.info "DEPLOYMENT SUCCESS: Server $NEW_HOSTNAME connected and streaming to syslog."
+  echo "[+] Remote syslog forwarding active and test packet sent."
 fi
 
 # ---------------------------------------------------------
