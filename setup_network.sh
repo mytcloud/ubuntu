@@ -53,18 +53,18 @@ apt-get clean
 # 0.7 Configure Remote Syslog Forwarding First (Ensures capture)
 # ---------------------------------------------------------
 if [ "$ENABLE_REMOTE_SYSLOG" = "true" ]; then
-  if [ -z "$SYSLOG_SERVER" ]; then
-    echo "[-] Error: SYSLOG_SERVER variable is empty in net_config.env!"
+  if [ -z "$SYSLOG_SERVER_IP" ]; then
+    echo "[-] Error: SYSLOG_SERVER_IP variable is empty in net_config.env!"
     exit 1
   fi
 
-  echo "[+] Configuring remote syslog forwarding to $SYSLOG_SERVER..."
+  echo "[+] Configuring remote syslog forwarding to $SYSLOG_SERVER_IP..."
   apt-get update && apt-get install -y rsyslog
   systemctl enable rsyslog
 
   cat << EOF > /etc/rsyslog.d/40-remote-forward.conf
 # Forward all system, kernel, and application logs to remote syslog server via DNS/IP
-*.* @${SYSLOG_SERVER}:514
+*.* ${SYSLOG_PROTOCOL}${SYSLOG_SERVER_IP}:514
 EOF
 
   systemctl restart rsyslog
@@ -129,14 +129,16 @@ hostnamectl set-hostname "$NEW_HOSTNAME"
 # ---------------------------------------------------------
 # 5. UFW Firewall & SSH Hardening
 # ---------------------------------------------------------
-echo "[+] Configuring UFW and hardening SSH..."
-apt-get install -y ufw fail2ban auditd aide apparmor
-ufw --force reset
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow from 197.224.67.0/24 to any port 22 proto tcp
-ufw allow from 197.224.66.0/24 to any port 22 proto tcp
-ufw --force enable
+if [ "$ENABLE_HARDENING" = "true" ]; then
+  echo "[+] Configuring UFW and hardening SSH..."
+  apt-get install -y ufw fail2ban auditd aide apparmor
+  ufw --force reset
+  ufw default deny incoming
+  ufw default allow outgoing
+  ufw allow from "$ALLOWED_SUBNET_1" to any port 22 proto tcp
+  ufw allow from "$ALLOWED_SUBNET_2" to any port 22 proto tcp
+  ufw --force enable
+fi
 
 # ---------------------------------------------------------
 # 6. Kernel Tuning & Performance Optimizations
@@ -159,8 +161,10 @@ sysctl --system
 # ---------------------------------------------------------
 # 7. Automated Maintenance & Lynis Audit Scan
 # ---------------------------------------------------------
-echo "[+] Installing Lynis and running security audit..."
-apt-get install -y lynis needrestart
-lynis audit system --quick > /var/log/lynis_report.log 2>&1 || true
+if [ "$ENABLE_LYNIS_AUDIT" = "true" ]; then
+  echo "[+] Installing Lynis and running security audit..."
+  apt-get install -y lynis needrestart
+  lynis audit system --quick > /var/log/lynis_report.log 2>&1 || true
+fi
 
 echo "[+] Setup script completed successfully!"
