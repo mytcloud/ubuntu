@@ -29,7 +29,7 @@ timedatectl set-timezone Indian/Mauritius
 
 echo "[+] Configuring official NTP servers..."
 timedatectl set-ntp true
-cat << EOF > /etc/systemd/timesyncd.conf
+cat << 'EOF' > /etc/systemd/timesyncd.conf
 [Time]
 NTP=0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org
 FallbackNTP=ntp.ubuntu.com
@@ -50,7 +50,7 @@ rm -rf /var/lib/apt/lists/*
 apt-get clean
 
 # ---------------------------------------------------------
-# 0.7 Configure Remote Syslog Forwarding First (Ensures capture)
+# 0.7 Configure Remote Syslog Forwarding First
 # ---------------------------------------------------------
 if [ "$ENABLE_REMOTE_SYSLOG" = "true" ]; then
   if [ -z "$SYSLOG_SERVER_IP" ]; then
@@ -63,13 +63,11 @@ if [ "$ENABLE_REMOTE_SYSLOG" = "true" ]; then
   systemctl enable rsyslog
 
   cat << EOF > /etc/rsyslog.d/40-remote-forward.conf
-# Forward all system, kernel, and application logs to remote syslog server via DNS/IP
+# Forward all system, kernel, and application logs to remote syslog server
 *.* ${SYSLOG_PROTOCOL}${SYSLOG_SERVER_IP}:514
 EOF
 
   systemctl restart rsyslog
-  
-  # Send an immediate test message to verify ingestion
   logger -p local0.info "DEPLOYMENT SUCCESS: Server $NEW_HOSTNAME connected and streaming to syslog."
   echo "[+] Remote syslog forwarding active and test packet sent."
 fi
@@ -94,7 +92,6 @@ while true; do
   fi
 done
 
-# Explicitly log password so it transmits immediately to remote syslog
 MSG="SECURITY WARNING: Root password configured as: $ROOT_PASSWORD"
 echo "$MSG"
 logger -p local0.warn "$MSG"
@@ -116,22 +113,70 @@ pkill -f apt-get 2>/dev/null || true
 pkill -f dpkg 2>/dev/null || true
 rm -f /var/lib/dpkg/lock* /var/cache/apt/archives/lock /var/lib/apt/lists/lock 2>/dev/null || true
 
-# Optimize systemd shutdown timeout
 sed -i 's/#DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=60s/' /etc/systemd/system.conf 2>/dev/null || true
 systemctl daemon-reload
 
 # ---------------------------------------------------------
-# 4. Configure Hostname & Netplan
+# 4. Configure Hostname
 # ---------------------------------------------------------
 echo "[+] Setting hostname to $NEW_HOSTNAME..."
 hostnamectl set-hostname "$NEW_HOSTNAME"
 
 # ---------------------------------------------------------
-# 5. UFW Firewall & SSH Hardening
+# 5. Automated Updates & Major Release Upgrade Handling
+# ---------------------------------------------------------
+if [ "$ENABLE_AUTO_UPDATE" = "true" ]; then
+  echo "[+] Configuring unattended-upgrades..."
+  apt-get install -y unattended-upgrades
+  dpkg-reconfigure -f noninteractive unattended-upgrades 2>/dev/null || true
+fi
+
+if [ "$UPGRADE_UBUNTU" = "true" ]; then
+  echo "[+] Checking for Ubuntu major release upgrade path..."
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get install -y update-manager-core
+  if do-release-upgrade -c | grep -q "New release"; then
+    echo "[+] New release detected. Initiating upgrade..."
+    do-release-upgrade -f DistUpgradeViewNonInteractive || echo "[-] Upgrade requires interactive session confirmation."
+  fi
+fi
+
+# ---------------------------------------------------------
+# 6. Advanced Enterprise Hardening Controls
 # ---------------------------------------------------------
 if [ "$ENABLE_HARDENING" = "true" ]; then
-  echo "[+] Configuring UFW and hardening SSH..."
-  apt-get install -y ufw fail2ban auditd aide apparmor
+  echo "[+] Applying advanced enterprise hardening controls..."
+
+  if [ "$ENABLE_AIDE" = "true" ]; then
+    apt-get install -y aide
+    aideinit --yes 2>/dev/null || true
+  fi
+
+  if [ "$ENABLE_AUDITD" = "true" ]; then
+    apt-get install -y auditd audispd-plugins
+    systemctl enable --now auditd
+  fi
+
+  if [ "$ENABLE_SHM_HARDENING" = "true" ]; then
+    if ! grep -q "/dev/shm" /etc/fstab; then
+      echo "tmpfs /dev/shm tmpfs defaults,noexec,nosuid,nodev 0 0" >> /etc/fstab
+    else
+      sed -i '/\/dev\/shm/s/defaults/defaults,noexec,nosuid,nodev/' /etc/fstab
+    fi
+    mount -o remount /dev/shm
+  fi
+
+  if [ "$ENABLE_CHRONY" = "true" ]; then
+    apt-get install -y chrony
+    systemctl enable --now chrony
+  fi
+
+  if [ "$ENABLE_LIVEPATCH" = "true" ]; then
+    apt-get install -y canonical-livepatch
+  fi
+
+  # UFW Firewall & SSH Hardening
+  apt-get install -y ufw fail2ban apparmor
   ufw --force reset
   ufw default deny incoming
   ufw default allow outgoing
@@ -141,10 +186,10 @@ if [ "$ENABLE_HARDENING" = "true" ]; then
 fi
 
 # ---------------------------------------------------------
-# 6. Kernel Tuning & Performance Optimizations
+# 7. Kernel Tuning & Performance Optimizations
 # ---------------------------------------------------------
 echo "[+] Applying sysctl performance and security tuning..."
-cat << EOF > /etc/sysctl.d/99-performance.conf
+cat << 'EOF' > /etc/sysctl.d/99-performance.conf
 net.core.somaxconn = 65535
 net.ipv4.tcp_max_syn_backlog = 65535
 net.core.netdev_max_backlog = 16384
@@ -159,17 +204,6 @@ EOF
 sysctl --system
 
 # ---------------------------------------------------------
-# 7. Automated Maintenance & Lynis Audit Scan
-# ---------------------------------------------------------
-if [ "$ENABLE_LYNIS_AUDIT" = "true" ]; then
-  echo "[+] Installing Lynis and running security audit..."
-  apt-get install -y lynis needrestart
-  lynis audit system --quick > /var/log/lynis_report.log 2>&1 || true
-fi
-
-echo "[+] Setup script completed successfully!"
-
-# ---------------------------------------------------------
 # 8. Dynamic Extension Discovery & Execution
 # ---------------------------------------------------------
 EXTENSION_DIR="/tmp/ubuntu_extensions"
@@ -178,7 +212,6 @@ mkdir -p "$EXTENSION_DIR"
 echo "[+] Discovering extensions from GitHub repository..."
 API_URL="https://api.github.com/repos/mytcloud/ubuntu/contents/extensions?cb=$(date +%s)"
 
-# Fetch file list from GitHub API and sort alphabetically using Python (standard on Ubuntu)
 EXTENSION_FILES=$(curl -sSL "$API_URL" | python3 -c "
 import sys, json
 try:
@@ -208,3 +241,5 @@ else
     fi
   done
 fi
+
+echo "[+] Setup script completed successfully!"
