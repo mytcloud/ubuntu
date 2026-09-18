@@ -185,37 +185,28 @@ sysctl --system
 EXTENSION_DIR="/tmp/ubuntu_extensions"
 mkdir -p "$EXTENSION_DIR"
 
-echo "[+] Discovering extensions from GitHub repository..."
-API_URL="https://api.github.com/repos/mytcloud/ubuntu/contents/extensions?cb=$(date +%s)"
+echo "[+] Downloading and executing modular extensions..."
 
-EXTENSION_FILES=$(curl -sSL "$API_URL" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    if isinstance(data, list):
-        files = [item['name'] for item in data if item['name'].endswith('.sh')]
-        files.sort()
-        for f in files:
-            print(f)
-except Exception:
-    pass
-")
+# Define your extension script names explicitly in execution order
+EXTENSION_FILES=(
+  "01-upgrade.sh"
+  "02-autoupdates.sh"
+  "03-syslog-historical.sh"
+)
 
-if [ -z "$EXTENSION_FILES" ]; then
-  echo "[-] No extensions found or unable to query GitHub API."
-else
-  for script in $EXTENSION_FILES; do
-    EXT_URL="https://raw.githubusercontent.com/mytcloud/ubuntu/refs/heads/main/extensions/${script}?cb=$(date +%s)"
-    DEST_FILE="$EXTENSION_DIR/$script"
-    
-    echo "[+] Downloading and executing extension: $script"
-    if curl -sSL -f "$EXT_URL" -o "$DEST_FILE"; then
-      bash "$DEST_FILE"
-      echo "[+] Extension $script completed."
-    else
-      echo "[-] Failed to download extension: $script"
-    fi
-  done
+for script in "${EXTENSION_FILES[@]}"; do
+  EXT_URL="https://raw.githubusercontent.com/mytcloud/ubuntu/refs/heads/main/extensions/${script}?cb=$(date +%s)"
+  DEST_FILE="$EXTENSION_DIR/$script"
+  
+  echo "[+] Fetching extension: $script"
+  if curl -sSL -f "$EXT_URL" -o "$DEST_FILE"; then
+    chmod +x "$DEST_FILE"
+    bash "$DEST_FILE"
+    echo "[+] Extension $script completed successfully."
+  else
+    echo "[-] Warning: Extension $script not found or failed to download (skipping)."
+  fi
+done
 fi
 
 echo "[+] Setup script completed successfully!"
