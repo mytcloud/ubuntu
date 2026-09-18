@@ -170,24 +170,41 @@ fi
 echo "[+] Setup script completed successfully!"
 
 # ---------------------------------------------------------
-# 8. Dynamic Extension / Custom Script Execution
+# 8. Dynamic Extension Discovery & Execution
 # ---------------------------------------------------------
 EXTENSION_DIR="/tmp/ubuntu_extensions"
 mkdir -p "$EXTENSION_DIR"
 
-EXTRA_SCRIPTS=(
-  "custom-tools.sh"
-  "99-cleanup.sh"
-)
+echo "[+] Discovering extensions from GitHub repository..."
+API_URL="https://api.github.com/repos/mytcloud/ubuntu/contents/extensions?cb=$(date +%s)"
 
-for script in "${EXTRA_SCRIPTS[@]}"; do
-  EXT_URL="https://raw.githubusercontent.com/mytcloud/ubuntu/refs/heads/main/extensions/${script}?cb=$(date +%s)"
-  
-  echo "[+] Checking for extension: $script..."
-  if curl -sSL --head "$EXT_URL" | grep "200 OK" &>/dev/null; then
+# Fetch file list from GitHub API and sort alphabetically using Python (standard on Ubuntu)
+EXTENSION_FILES=$(curl -sSL "$API_URL" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    if isinstance(data, list):
+        files = [item['name'] for item in data if item['name'].endswith('.sh')]
+        files.sort()
+        for f in files:
+            print(f)
+except Exception:
+    pass
+")
+
+if [ -z "$EXTENSION_FILES" ]; then
+  echo "[-] No extensions found or unable to query GitHub API."
+else
+  for script in $EXTENSION_FILES; do
+    EXT_URL="https://raw.githubusercontent.com/mytcloud/ubuntu/refs/heads/main/extensions/${script}?cb=$(date +%s)"
+    DEST_FILE="$EXTENSION_DIR/$script"
+    
     echo "[+] Downloading and executing extension: $script"
-    curl -sSL "$EXT_URL" -o "$EXTENSION_DIR/$script"
-    bash "$EXTENSION_DIR/$script"
-    echo "[+] Extension $script completed."
-  fi
-done
+    if curl -sSL -f "$EXT_URL" -o "$DEST_FILE"; then
+      bash "$DEST_FILE"
+      echo "[+] Extension $script completed."
+    else
+      echo "[-] Failed to download extension: $script"
+    fi
+  done
+fi
