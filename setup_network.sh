@@ -175,15 +175,12 @@ echo "[+] Setup script completed successfully!"
 EXTENSION_DIR="/tmp/ubuntu_extensions"
 mkdir -p "$EXTENSION_DIR"
 
-# Example: If you have specific post-setup scripts on GitHub
-# You can download and execute them dynamically:
 EXTRA_SCRIPTS=(
   "custom-tools.sh"
-  # "another-script.sh"
+  "99-cleanup.sh"
 )
 
 for script in "${EXTRA_SCRIPTS[@]}"; do
-  # Check if the extension file exists locally or download it
   EXT_URL="https://raw.githubusercontent.com/mytcloud/ubuntu/refs/heads/main/extensions/${script}?cb=$(date +%s)"
   
   echo "[+] Checking for extension: $script..."
