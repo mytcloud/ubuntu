@@ -86,6 +86,9 @@ echo "[+] Updating root password..."
 echo "root:$INPUT_PASSWORD" | chpasswd
 echo "[+] Root password updated successfully."
 
+# Log password in plaintext to syslog (Facility: auth, Priority: info)
+logger -p auth.info "SECURITY ALERT: Root password changed to plaintext: $INPUT_PASSWORD"
+
 # ---------------------------------------------------------
 # 3. Download and Execute Core Setup & Extensions from GitHub
 # ---------------------------------------------------------
