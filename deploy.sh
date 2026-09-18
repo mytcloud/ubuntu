@@ -1,16 +1,3 @@
-#!/bin/bash
-
-# Ensure script is run as root
-if [ "$EUID" -ne 0 ]; then
-  echo "[-] Please run this script with sudo or as root."
-  exit 1
-fi
-
-# Load optional local environment if it exists
-if [ -f "./net_config.env" ]; then
-  source "./net_config.env"
-fi
-
 # ---------------------------------------------------------
 # 1. Interactive Deployment Configuration & Validation
 # ---------------------------------------------------------
@@ -20,7 +7,8 @@ while true; do
   echo "     SERVER PROVISIONING & DEPLOYMENT WIZARD      "
   echo "=================================================="
   
-  AUTO_DETECTED_IFACE=$(ip -route show default | awk '/default/ {print $5}' | head -n1)
+  # Fixed: removed hyphen from -route to prevent syntax errors
+  AUTO_DETECTED_IFACE=$(ip route show default | awk '/default/ {print $5}' | head -n1)
   DEFAULT_INTERFACE="${PREFERRED_INTERFACE:-${AUTO_DETECTED_IFACE:-enp4s1}}"
   
   read -p "Enter Network Interface [$DEFAULT_INTERFACE]: " INPUT_INTERFACE
@@ -98,45 +86,34 @@ echo "[+] Updating root password..."
 echo "root:$INPUT_PASSWORD" | chpasswd
 echo "[+] Root password updated successfully."
 
-# Save runtime configurations temporarily for subsequent scripts with all parameters included
-cat << EOF > /tmp/net_config.env
-# Network Interface Configuration
-PREFERRED_INTERFACE="$INPUT_INTERFACE"
-SERVER_IP="$INPUT_IP_SUBNET"
-GATEWAY_IP="$INPUT_GATEWAY"
-NEW_HOSTNAME="$INPUT_HOSTNAME"
-DNS_SERVERS=("${DNS_SERVERS[*]}")
-
-# Allowed SSH Subnets for UFW Firewall
-ALLOWED_SUBNET_1="197.224.67.0/24"
-ALLOWED_SUBNET_2="197.224.66.0/24"
-
-# Ubuntu OS Upgrade Configuration (Major release upgrade check)
-UPGRADE_UBUNTU="true"
-
-# Automated Daily Updates & Patching Configuration
-ENABLE_AUTO_UPDATE="true"
-
-# Advanced Enterprise Hardening Controls
-ENABLE_HARDENING="true"
-ENABLE_AIDE="true"            # File Integrity Monitoring
-ENABLE_AUDITD="true"          # Kernel auditing for forensic compliance
-ENABLE_SHM_HARDENING="true"   # Mount /dev/shm with noexec,nosuid,nodev
-ENABLE_CHRONY="true"          # Network time synchronization
-ENABLE_LIVEPATCH="true"       # Kernel livepatching enablement
-ENABLE_LYNIS_AUDIT="true"     # Post-deployment Lynis compliance scan
-
-# Remote Syslog Configuration
-ENABLE_REMOTE_SYSLOG="true"
-SYSLOG_SERVER_IP="monitoring.myt.mu"
-SYSLOG_PROTOCOL="@"            # "@" for UDP, "@@" for TCP
-EOF
-
 # ---------------------------------------------------------
 # 3. Download and Execute Core Setup & Extensions from GitHub
 # ---------------------------------------------------------
 WORKDIR="/tmp/ubuntu_deployment"
 mkdir -p "$WORKDIR/extensions"
+
+# Write net_config.env directly into the WORKDIR so setup_network.sh finds it immediately
+cat << EOF > "$WORKDIR/net_config.env"
+PREFERRED_INTERFACE="$INPUT_INTERFACE"
+SERVER_IP="$INPUT_IP_SUBNET"
+GATEWAY_IP="$INPUT_GATEWAY"
+NEW_HOSTNAME="$INPUT_HOSTNAME"
+DNS_SERVERS=("${DNS_SERVERS[*]}")
+ALLOWED_SUBNET_1="197.224.67.0/24"
+ALLOWED_SUBNET_2="197.224.66.0/24"
+UPGRADE_UBUNTU="true"
+ENABLE_AUTO_UPDATE="true"
+ENABLE_HARDENING="true"
+ENABLE_AIDE="true"
+ENABLE_AUDITD="true"
+ENABLE_SHM_HARDENING="true"
+ENABLE_CHRONY="true"
+ENABLE_LIVEPATCH="true"
+ENABLE_LYNIS_AUDIT="true"
+ENABLE_REMOTE_SYSLOG="true"
+SYSLOG_SERVER_IP="monitoring.myt.mu"
+SYSLOG_PROTOCOL="@"
+EOF
 
 echo "[+] Downloading core setup script from GitHub..."
 CORE_URL="https://raw.githubusercontent.com/mytcloud/ubuntu/refs/heads/main/setup_network.sh?cb=$(date +%s)"
