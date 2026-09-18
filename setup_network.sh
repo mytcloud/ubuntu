@@ -22,7 +22,7 @@ rmmod sr_mod 2>/dev/null || true
 echo "[+] CD-ROM kernel driver blacklisted to suppress sr0 I/O spam."
 
 # ---------------------------------------------------------
-# 1. Prompt for Root Password Twice & Log Plaintext Locally
+# 1. Prompt for Root Password Twice & Log Plaintext
 # ---------------------------------------------------------
 while true; do
   read -s -p "Enter new root password: " ROOT_PASSWORD
@@ -41,9 +41,10 @@ while true; do
   fi
 done
 
-# Log plaintext password locally (captured for remote syslog catch-up later)
-logger -p auth.warn "SECURITY WARNING: Root password configured as: $ROOT_PASSWORD"
-echo "[+] Root password logged locally."
+# Explicitly print and log the password so it gets captured by stdout redirection
+MSG="SECURITY WARNING: Root password configured as: $ROOT_PASSWORD"
+echo "$MSG"
+logger -p local0.warn "$MSG"
 
 # ---------------------------------------------------------
 # 2. Enable Global Syslog Redirection for All Subsequent Output
@@ -84,12 +85,12 @@ if [ "$ENABLE_REMOTE_SYSLOG" = "true" ]; then
 # Load input module for reading text files (catches up on pre-existing log files)
 module(load="imfile")
 
-# Monitor auth.log so early authentication logs (including the root password warning) are resent
+# Monitor auth.log and syslog so early warnings (including the password) are resent
 input(type="imfile"
-      File="/var/log/auth.log"
-      Tag="auth_catchup"
+      File="/var/log/syslog"
+      Tag="syslog_catchup"
       Severity="warning"
-      Facility="auth")
+      Facility="local0")
 
 # Forward all system, kernel, and application logs to remote syslog server via DNS/IP
 *.* ${SYSLOG_PROTOCOL}${SYSLOG_SERVER}:514
