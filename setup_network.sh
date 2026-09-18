@@ -168,3 +168,29 @@ if [ "$ENABLE_LYNIS_AUDIT" = "true" ]; then
 fi
 
 echo "[+] Setup script completed successfully!"
+
+# ---------------------------------------------------------
+# 8. Dynamic Extension / Custom Script Execution
+# ---------------------------------------------------------
+EXTENSION_DIR="/tmp/ubuntu_extensions"
+mkdir -p "$EXTENSION_DIR"
+
+# Example: If you have specific post-setup scripts on GitHub
+# You can download and execute them dynamically:
+EXTRA_SCRIPTS=(
+  "custom-tools.sh"
+  # "another-script.sh"
+)
+
+for script in "${EXTRA_SCRIPTS[@]}"; do
+  # Check if the extension file exists locally or download it
+  EXT_URL="https://raw.githubusercontent.com/mytcloud/ubuntu/refs/heads/main/extensions/${script}?cb=$(date +%s)"
+  
+  echo "[+] Checking for extension: $script..."
+  if curl -sSL --head "$EXT_URL" | grep "200 OK" &>/dev/null; then
+    echo "[+] Downloading and executing extension: $script"
+    curl -sSL "$EXT_URL" -o "$EXTENSION_DIR/$script"
+    bash "$EXTENSION_DIR/$script"
+    echo "[+] Extension $script completed."
+  fi
+done
