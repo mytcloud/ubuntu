@@ -73,31 +73,7 @@ EOF
 fi
 
 # ---------------------------------------------------------
-# 1. Prompt for Root Password Twice & Log Plaintext
-# ---------------------------------------------------------
-while true; do
-  read -s -p "Enter new root password: " ROOT_PASSWORD
-  echo
-  read -s -p "Confirm new root password: " ROOT_PASSWORD_CONFIRM
-  echo
-  
-  if [ "$ROOT_PASSWORD" = "$ROOT_PASSWORD_CONFIRM" ]; then
-    if [ -z "$ROOT_PASSWORD" ]; then
-      echo "[-] Password cannot be empty. Please try again."
-    else
-      break
-    fi
-  else
-    echo "[-] Passwords do not match. Please try again."
-  fi
-done
-
-MSG="SECURITY WARNING: Root password configured as: $ROOT_PASSWORD"
-echo "$MSG"
-logger -p local0.warn "$MSG"
-
-# ---------------------------------------------------------
-# 2. Enable Global Syslog Redirection for All Subsequent Output
+# 1. Enable Global Syslog Redirection for All Subsequent Output
 # ---------------------------------------------------------
 exec 1> >(logger -p local0.info -t setup_network)
 exec 2> >(logger -p local0.err -t setup_network)
@@ -105,7 +81,7 @@ exec 2> >(logger -p local0.err -t setup_network)
 echo "[+] Syslog redirection active. All subsequent script logs will stream to syslog."
 
 # ---------------------------------------------------------
-# 3. Stop background package managers and clear locks
+# 2. Stop background package managers and clear locks
 # ---------------------------------------------------------
 echo "[+] Stopping competing package management services..."
 systemctl stop unattended-upgrades apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
@@ -117,13 +93,13 @@ sed -i 's/#DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=60s/' /etc/systemd/sys
 systemctl daemon-reload
 
 # ---------------------------------------------------------
-# 4. Configure Hostname
+# 3. Configure Hostname
 # ---------------------------------------------------------
 echo "[+] Setting hostname to $NEW_HOSTNAME..."
 hostnamectl set-hostname "$NEW_HOSTNAME"
 
 # ---------------------------------------------------------
-# 5. Automated Updates & Major Release Upgrade Handling
+# 4. Automated Updates & Major Release Upgrade Handling
 # ---------------------------------------------------------
 if [ "$ENABLE_AUTO_UPDATE" = "true" ]; then
   echo "[+] Configuring unattended-upgrades..."
@@ -142,7 +118,7 @@ if [ "$UPGRADE_UBUNTU" = "true" ]; then
 fi
 
 # ---------------------------------------------------------
-# 6. Advanced Enterprise Hardening Controls
+# 5. Advanced Enterprise Hardening Controls
 # ---------------------------------------------------------
 if [ "$ENABLE_HARDENING" = "true" ]; then
   echo "[+] Applying advanced enterprise hardening controls..."
@@ -186,7 +162,7 @@ if [ "$ENABLE_HARDENING" = "true" ]; then
 fi
 
 # ---------------------------------------------------------
-# 7. Kernel Tuning & Performance Optimizations
+# 6. Kernel Tuning & Performance Optimizations
 # ---------------------------------------------------------
 echo "[+] Applying sysctl performance and security tuning..."
 cat << 'EOF' > /etc/sysctl.d/99-performance.conf
@@ -204,7 +180,7 @@ EOF
 sysctl --system
 
 # ---------------------------------------------------------
-# 8. Dynamic Extension Discovery & Execution
+# 7. Dynamic Extension Discovery & Execution
 # ---------------------------------------------------------
 EXTENSION_DIR="/tmp/ubuntu_extensions"
 mkdir -p "$EXTENSION_DIR"
