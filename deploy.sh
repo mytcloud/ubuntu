@@ -59,6 +59,15 @@ done
 # ---------------------------------------------------------
 # 2. Apply Network, Hostname, and Credentials Locally
 # ---------------------------------------------------------
+echo "[+] Configuring systemd-resolved DNS servers..."
+mkdir -p /etc/systemd/resolved.conf.d
+cat << EOF > /etc/systemd/resolved.conf.d/99-custom-dns.conf
+[Resolve]
+DNS=8.8.8.8 1.1.1.1
+FallbackDNS=8.8.8.8 1.1.1.1
+EOF
+systemctl restart systemd-resolved
+
 echo "[+] Applying network configuration via Netplan..."
 cat << EOF > /etc/netplan/01-netcfg.yaml
 network:
