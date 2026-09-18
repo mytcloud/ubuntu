@@ -22,7 +22,7 @@ rmmod sr_mod 2>/dev/null || true
 echo "[+] CD-ROM kernel driver blacklisted to suppress sr0 I/O spam."
 
 # ---------------------------------------------------------
-# 0.5 Configure Timezone & Official NTP Time Sync Immediately
+# 0.5 Configure Timezone & Official NTP Time Sync with Wait Loop
 # ---------------------------------------------------------
 echo "[+] Setting timezone to Indian/Mauritius..."
 timedatectl set-timezone Indian/Mauritius
@@ -35,6 +35,12 @@ NTP=0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org
 FallbackNTP=ntp.ubuntu.com
 EOF
 systemctl restart systemd-timesyncd 2>/dev/null || true
+
+echo "[+] Waiting for system clock to synchronize via NTP..."
+while [ "$(timedatectl show --property=NTPSynchronized --value)" != "yes" ]; do
+  sleep 2
+done
+echo "[+] System time synchronized successfully!"
 
 # ---------------------------------------------------------
 # 0.7 Configure Remote Syslog Forwarding First (Ensures capture)
