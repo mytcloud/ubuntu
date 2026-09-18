@@ -1,38 +1,88 @@
-#!/bin/bash
+# ---------------------------------------------------------
+# Interactive Deployment Configuration & Validation
+# ---------------------------------------------------------
+while true; do
+  clear
+  echo "=================================================="
+  echo "         SERVER PROVISIONING CONFIGURATION        "
+  echo "=================================================="
+  
+  # Auto-detect primary network interface
+  PRIMARY_INTERFACE=$(ip -route show default | awk '/default/ {print $5}' | head -n1)
+  echo "[*] Detected primary network interface: ${PRIMARY_INTERFACE:-eth0}"
+  
+  read -p "Enter Static IP Address (e.g., 192.168.1.100): " INPUT_IP
+  read -p "Enter Subnet Mask Prefix (e.g., 24 for 255.255.255.0): " INPUT_PREFIX
+  read -p "Enter Gateway IP Address (e.g., 192.168.1.1): " INPUT_GATEWAY
+  read -p "Enter New Hostname: " INPUT_HOSTNAME
+  
+  read -s -p "Enter New Root Password: " INPUT_PASSWORD
+  echo
+  read -s -p "Confirm New Root Password: " INPUT_PASSWORD_CONFIRM
+  echo
 
-# Ensure script is run as root
-if [ "$EUID" -ne 0 ]; then
-  echo "[-] Please run this script with sudo or as root."
-  exit 1
-fi
+  if [ "$INPUT_PASSWORD" != "$INPUT_PASSWORD_CONFIRM" ]; then
+    echo "[-] Passwords do not match. Please try again."
+    sleep 2
+    continue
+  fi
 
-# ---------------------------------------------------------
-# 1. Bring up network interface (enp4s1)
-# ---------------------------------------------------------
-echo "[+] Applying local static network configuration on enp4s1..."
-# (Assuming netplan or network setup logic is handled here)
+  if [ -z "$INPUT_IP" ] || [ -z "$INPUT_PREFIX" ] || [ -z "$INPUT_GATEWAY" ] || [ -z "$INPUT_HOSTNAME" ] || [ -z "$INPUT_PASSWORD" ]; then
+    echo "[-] All fields are required. Please try again."
+    sleep 2
+    continue
+  fi
 
-# ---------------------------------------------------------
-# 2. Wait for Internet Reachability
-# ---------------------------------------------------------
-echo "[+] Waiting for internet reachability..."
-while ! ping -c 1 -w 2 8.8.8.8 &>/dev/null; do
-  sleep 2
+  echo
+  echo "--------------------------------------------------"
+  echo "             CONFIGURATION REVIEW                 "
+  echo "--------------------------------------------------"
+  echo " Interface:    ${PRIMARY_INTERFACE:-eth0}"
+  echo " IP Address:   $INPUT_IP/$INPUT_PREFIX"
+  echo " Gateway:      $INPUT_GATEWAY"
+  echo " Hostname:     $INPUT_HOSTNAME"
+  echo " Root Password: [SECURELY CONFIGURED]"
+  echo "--------------------------------------------------"
+  
+  read -p "Do you want to apply these settings? (y/N): " CONFIRM
+  if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+    break
+  else
+    echo "[+] Restarting input prompts..."
+    sleep 2
+  fi
 done
 
 # ---------------------------------------------------------
-# 3. Download Full Setup Stack from GitHub (with Cache-Busting)
+# Apply Configuration Dynamically
 # ---------------------------------------------------------
-echo "[+] Downloading full setup stack from GitHub..."
-CACHE_BUSTER=$(date +%s)
+INTERFACE_NAME="${PRIMARY_INTERFACE:-eth0}"
 
-curl -sSL "https://raw.githubusercontent.com/mytcloud/ubuntu/refs/heads/main/setup_network.sh?cb=${CACHE_BUSTER}" -o setup_network.sh
-curl -sSL "https://raw.githubusercontent.com/mytcloud/ubuntu/refs/heads/main/net_config.env?cb=${CACHE_BUSTER}" -o net_config.env
+echo "[+] Applying network configuration via Netplan..."
+cat << EOF > /etc/netplan/01-netcfg.yaml
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    $INTERFACE_NAME:
+      dhcp4: no
+      addresses:
+        - $INPUT_IP/$INPUT_PREFIX
+      routes:
+        - to: default
+          via: $INPUT_GATEWAY
+      nameservers:
+        addresses:
+          - 8.8.8.8
+          - 1.1.1.1
+EOF
 
-chmod +x setup_network.sh
+netplan apply
+echo "[+] Network applied successfully."
 
-# ---------------------------------------------------------
-# 4. Execute Full Setup Script
-# ---------------------------------------------------------
-echo "[+] Executing full setup script..."
-bash ./setup_network.sh
+echo "[+] Setting hostname to $INPUT_HOSTNAME..."
+hostnamectl set-hostname "$INPUT_HOSTNAME"
+
+echo "[+] Setting root password..."
+echo "root:$INPUT_PASSWORD" | chpasswd
+echo "[+] Root password updated successfully."
