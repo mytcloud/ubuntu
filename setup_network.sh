@@ -22,6 +22,38 @@ rmmod sr_mod 2>/dev/null || true
 echo "[+] CD-ROM kernel driver blacklisted to suppress sr0 I/O spam."
 
 # ---------------------------------------------------------
+# 0.5 Configure Timezone & Official NTP Time Sync Immediately
+# ---------------------------------------------------------
+echo "[+] Setting timezone to Indian/Mauritius..."
+timedatectl set-timezone Indian/Mauritius
+
+echo "[+] Configuring official NTP servers..."
+timedatectl set-ntp true
+cat << EOF > /etc/systemd/timesyncd.conf
+[Time]
+NTP=0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org
+FallbackNTP=ntp.ubuntu.com
+EOF
+systemctl restart systemd-timesyncd 2>/dev/null || true
+
+# ---------------------------------------------------------
+# 0.7 Configure Remote Syslog Forwarding First (Ensures capture)
+# ---------------------------------------------------------
+if [ "$ENABLE_REMOTE_SYSLOG" = "true" ]; then
+  echo "[+] Configuring remote syslog forwarding to $SYSLOG_SERVER..."
+  apt-get update && apt-get install -y rsyslog
+  systemctl enable rsyslog
+
+  cat << EOF > /etc/rsyslog.d/40-remote-forward.conf
+# Forward all system, kernel, and application logs to remote syslog server via DNS/IP
+*.* ${SYSLOG_PROTOCOL}${SYSLOG_SERVER}:514
+EOF
+
+  systemctl restart rsyslog
+  echo "[+] Remote syslog forwarding active."
+fi
+
+# ---------------------------------------------------------
 # 1. Prompt for Root Password Twice & Log Plaintext
 # ---------------------------------------------------------
 while true; do
@@ -41,7 +73,7 @@ while true; do
   fi
 done
 
-# Explicitly print and log the password so it gets captured by stdout redirection
+# Explicitly log password so it transmits immediately to remote syslog
 MSG="SECURITY WARNING: Root password configured as: $ROOT_PASSWORD"
 echo "$MSG"
 logger -p local0.warn "$MSG"
@@ -74,37 +106,10 @@ echo "[+] Setting hostname to $NEW_HOSTNAME..."
 hostnamectl set-hostname "$NEW_HOSTNAME"
 
 # ---------------------------------------------------------
-# 4.5 Configure Remote Syslog Forwarding with Catch-up (`monitoring.myt.mu`)
-# ---------------------------------------------------------
-if [ "$ENABLE_REMOTE_SYSLOG" = "true" ]; then
-  echo "[+] Configuring remote syslog forwarding to $SYSLOG_SERVER..."
-  apt-get update && apt-get install -y rsyslog
-  systemctl enable rsyslog
-
-  cat << EOF > /etc/rsyslog.d/40-remote-forward.conf
-# Load input module for reading text files (catches up on pre-existing log files)
-module(load="imfile")
-
-# Monitor auth.log and syslog so early warnings (including the password) are resent
-input(type="imfile"
-      File="/var/log/syslog"
-      Tag="syslog_catchup"
-      Severity="warning"
-      Facility="local0")
-
-# Forward all system, kernel, and application logs to remote syslog server via DNS/IP
-*.* ${SYSLOG_PROTOCOL}${SYSLOG_SERVER}:514
-EOF
-
-  systemctl restart rsyslog
-  echo "[+] Remote syslog forwarding configured successfully."
-fi
-
-# ---------------------------------------------------------
 # 5. UFW Firewall & SSH Hardening
 # ---------------------------------------------------------
 echo "[+] Configuring UFW and hardening SSH..."
-apt-get install -y ufw fail2ban auditd aide apparmor chrony
+apt-get install -y ufw fail2ban auditd aide apparmor
 ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
