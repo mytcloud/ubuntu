@@ -126,6 +126,7 @@ WORKDIR="/tmp/ubuntu_deployment"
 mkdir -p "$WORKDIR/extensions"
 
 echo "[+] Downloading core setup script from GitHub..."
+curl -sSL "https://raw.githubusercontent.com/mytcloud/ubuntu/refs/heads/main/net_config.env?cb=${CACHE_BUSTER}" -o net_config.env
 CORE_URL="https://raw.githubusercontent.com/mytcloud/ubuntu/refs/heads/main/setup_network.sh?cb=$(date +%s)"
 if curl -sSL -f "$CORE_URL" -o "$WORKDIR/setup_network.sh"; then
   chmod +x "$WORKDIR/setup_network.sh"
