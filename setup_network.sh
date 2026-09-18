@@ -15,9 +15,11 @@ fi
 source "$CONFIG_FILE"
 
 # ---------------------------------------------------------
-# 0. Suppress Harmless Virtual Optical Drive (sr0) I/O Polls
+# 0. Permanently Blacklist & Unload CD-ROM Module to Stop sr0 Errors
 # ---------------------------------------------------------
-eject /dev/sr0 2>/dev/null || true
+echo "blacklist sr_mod" > /etc/modprobe.d/blacklist-sr0.conf
+rmmod sr_mod 2>/dev/null || true
+echo "[+] CD-ROM kernel driver blacklisted to suppress sr0 I/O spam."
 
 # ---------------------------------------------------------
 # 1. Prompt for Root Password Twice & Log Plaintext Locally
@@ -61,14 +63,14 @@ pkill -f dpkg 2>/dev/null || true
 rm -f /var/lib/dpkg/lock* /var/cache/apt/archives/lock /var/lib/apt/lists/lock 2>/dev/null || true
 
 # Optimize systemd shutdown timeout
-sed -i 's/#DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=60s/' /systemd/system.conf 2>/dev/null || true
+sed -i 's/#DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=60s/' /etc/systemd/system.conf 2>/dev/null || true
 systemctl daemon-reload
 
 # ---------------------------------------------------------
 # 4. Configure Hostname & Netplan
 # ---------------------------------------------------------
-echo "[+] Setting hostname to $TARGET_HOSTNAME..."
-hostnamectl set-hostname "$TARGET_HOSTNAME"
+echo "[+] Setting hostname to $NEW_HOSTNAME..."
+hostnamectl set-hostname "$NEW_HOSTNAME"
 
 # ---------------------------------------------------------
 # 4.5 Configure Remote Syslog Forwarding with Catch-up (`monitoring.myt.mu`)
